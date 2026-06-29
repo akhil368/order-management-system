@@ -1,0 +1,79 @@
+version: '3.8'
+
+# -------------------------------------------------------
+# Local development docker-compose
+# Starts: Kafka, Zookeeper, MySQL, Redis, Kafka UI
+# Run: docker-compose up -d
+# Stop: docker-compose down
+# -------------------------------------------------------
+
+services:
+
+  # ---- Zookeeper (required by Kafka) ----
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: oms-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # ---- Kafka Broker ----
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: oms-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Two listeners:
+      # PLAINTEXT         → for your Spring Boot app on your machine (localhost:9092)
+      # PLAINTEXT_INTERNAL → for containers talking to each other (kafka:29092)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168        # keep messages for 7 days
+
+  # ---- Kafka UI (visual dashboard) ----
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: oms-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-oms
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092   # internal container address
+
+  # ---- MySQL (Order Service DB) ----
+  mysql:
+    image: mysql:8.0
+    container_name: oms-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: order_db
+    volumes:
+      - mysql_data:/var/lib/mysql   # persists data between restarts
+
+  # ---- Redis (Caching) ----
+  redis:
+    image: redis:7.2
+    container_name: oms-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes        # persistent mode
+
+volumes:
+  mysql_data:
