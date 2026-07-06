@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: order-service
+  jpa:
+    hibernate:
+      ddl-auto: update
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+  cloud:
+    config:
+      enabled: false
+eureka:
+  client:
+    enabled: false
+app:
+  kafka:
+    topics:
+      order-placed: order-placed-events
+      order-cancelled: order-cancelled-events

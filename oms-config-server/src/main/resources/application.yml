@@ -1,0 +1,24 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: native                       # dev backend: serve config from the classpath
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: classpath:/config-repo
+        # ----- PRODUCTION: use Git instead (remove the 'native' profile above) -----
+        # git:
+        #   uri: https://github.com/<you>/oms-config-repo
+        #   default-label: main
+        #   # search-paths: oms       # optional sub-folder inside the repo
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
