@@ -4,55 +4,5 @@ server:
 spring:
   application:
     name: api-gateway
-
-  data:
-    redis:
-      host: localhost
-      port: 6379
-
-  cloud:
-    gateway:
-      discovery:
-        locator:
-          enabled: false        # use EXPLICIT routes (clearer than auto-routing every service)
-      routes:
-        - id: order-service
-          uri: lb://order-service          # resolved via Eureka + LoadBalancer
-          predicates:
-            - Path=/api/v1/orders/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 5     # tokens refilled per second
-                redis-rate-limiter.burstCapacity: 10    # max bucket size (allowed burst)
-                key-resolver: "#{@ipKeyResolver}"        # rate-limit per client IP
-
-        - id: inventory-service
-          uri: lb://inventory-service
-          predicates:
-            - Path=/api/v1/inventory/**
-
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "*"
-            allowedMethods: [GET, POST, PUT, DELETE]
-            allowedHeaders: "*"
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-  instance:
-    prefer-ip-address: true
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info, gateway     # /actuator/gateway/routes to inspect live routes
-
-logging:
-  level:
-    org.springframework.cloud.gateway: INFO
-    com.oms: DEBUG
+  config:
+    import: optional:configserver:http://localhost:8888

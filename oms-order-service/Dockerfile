@@ -5,7 +5,7 @@
 # -------------------------------------------------------
 
 # Stage 1: Build
-FROM maven:3.9.6-eclipse-temurin-21 AS build
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
 # Download dependencies first (cached layer — speeds up rebuilds)
@@ -16,10 +16,8 @@ RUN mvn clean package -DskipTests
 # Stage 2: Run
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
+RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /app/target/*.jar app.jar
-
-# Expose the port
+USER app
 EXPOSE 8081
-
-# Run the jar
 ENTRYPOINT ["java", "-jar", "app.jar"]

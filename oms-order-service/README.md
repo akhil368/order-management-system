@@ -1,107 +1,33 @@
-# OMS Order Service
+# Order Service (port 8081)
 
-Part of the **Order Management System** — an event-driven microservices architecture built with Spring Boot 3, Java 21, Apache Kafka, PostgreSQL, Redis, Docker, and Azure.
+Accepts customer orders, persists them to its own MySQL database (`order_db`), and publishes an
+`OrderPlaced` event to Kafka. Part of the [Order Management System](../README.md).
 
-## Architecture Overview
+## Responsibility
+Owns the **order** side of checkout: capturing what the customer wants (order record, customer,
+price) and announcing it. It does **not** call inventory directly for the reserve — it publishes an
+event and moves on, so a slow/down inventory-service can't block the checkout.
 
-```
-Client
-  │
-  ▼
-API Gateway (port 8080)
-  │
-  ▼
-Order Service (port 8081)  ──► PostgreSQL (order_db)
-  │
-  │  publishes OrderPlacedEvent
-  ▼
-Apache Kafka (order-placed-events topic)
-  │
-  ├──► Inventory Service (reduces stock)
-  └──► Notification Service (sends email)
-```
+## What it does
+- `POST /api/v1/orders` — place an order → saves to `order_db`, publishes `OrderPlaced` to Kafka → `201`
+- `GET  /api/v1/orders/{orderId}` — fetch an order
+- `GET  /api/v1/orders/customer/{customerId}` — orders for a customer
+- `GET  /api/v1/orders/stock-check/{productId}?quantity=n` — checks inventory via Feign, wrapped in a
+  **Resilience4j circuit breaker** (returns a degraded fallback if inventory-service is down, not a 500)
 
-## Tech Stack
+## Key pieces
+- `OrderService` / `OrderController` — order logic + REST API
+- Kafka **producer** + `KafkaTopicConfig` — publishes `OrderPlaced`
+- `InventoryClient` (Feign) + `InventoryClientService` (`@CircuitBreaker`) — resilient inventory call
+- `GlobalExceptionHandler` — consistent error responses
 
-| Layer | Technology |
-|---|---|
-| Language | Java 21 |
-| Framework | Spring Boot 3.2 |
-| Messaging | Apache Kafka |
-| Database | PostgreSQL 16 |
-| Caching | Redis 7 |
-| Build | Maven |
-| Container | Docker |
-| Cloud | Azure (App Service / AKS) |
-| CI/CD | GitHub Actions |
+## Config & tech
+Spring Boot 3.2.5 (Java 17), Spring Cloud 2023.0.1, JPA/MySQL (`order_db`), Kafka producer, Eureka
+client, Config client (fetches config from the Config Server at :8888). Circuit-breaker settings live
+in the config server's `config-repo/order-service.yml`.
 
-## Running Locally
-
-### Prerequisites
-- Java 21
-- Maven 3.9+
-- Docker Desktop
-
-### Step 1: Start infrastructure
+## Run / test
 ```bash
-docker-compose up -d
+mvn spring-boot:run     # needs config-server + eureka up first, and infra via docker-compose
+mvn verify              # integration test: persists to real MySQL + publishes to real Kafka (Testcontainers)
 ```
-This starts: Kafka, Zookeeper, PostgreSQL, Redis, Kafka UI
-
-### Step 2: Run the service
-```bash
-mvn spring-boot:run
-```
-
-### Step 3: Test the API
-```bash
-# Place an order
-curl -X POST http://localhost:8081/api/v1/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "productId": "PROD-001",
-    "customerId": "CUST-001",
-    "customerEmail": "test@example.com",
-    "quantity": 2,
-    "price": 499.99
-  }'
-
-# Get order by ID
-curl http://localhost:8081/api/v1/orders/{orderId}
-
-# Get orders by customer
-curl http://localhost:8081/api/v1/orders/customer/CUST-001
-```
-
-### Step 4: View Kafka events
-Open Kafka UI: http://localhost:8090
-Navigate to Topics → order-placed-events → Messages
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/orders` | Place a new order |
-| GET | `/api/v1/orders/{id}` | Get order by ID |
-| GET | `/api/v1/orders/customer/{id}` | Get all orders by customer |
-
-## Project Structure
-
-```
-src/main/java/com/oms/orderservice/
-├── controller/     # REST endpoints
-├── service/        # Business logic + Kafka publishing
-├── repository/     # JPA repositories
-├── model/          # JPA entities
-├── dto/            # Request/Response objects
-├── event/          # Kafka event classes
-├── config/         # Kafka topic config
-└── exception/      # Custom exceptions + global handler
-```
-
-## Related Services
-- [oms-inventory-service](https://github.com/yourusername/oms-inventory-service)
-- [oms-notification-service](https://github.com/yourusername/oms-notification-service)
-- [oms-api-gateway](https://github.com/yourusername/oms-api-gateway)
-- [oms-config-server](https://github.com/yourusername/oms-config-server)
-- [oms-infrastructure](https://github.com/yourusername/oms-infrastructure)
